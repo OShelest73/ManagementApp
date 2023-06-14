@@ -1,0 +1,193 @@
+﻿@*@page "/SampleData"
+@inject IUserData userData
+@inject ICategoryData categoryData
+@inject ITaskData taskData
+@inject IStatusData statusData
+<h3>SamplePage</h3>
+
+@if(userCreated)
+{
+    <h4>User created</h4>
+}
+else
+{
+    <button class="btn btn-primary" @onclick="CreateUser">Create user</button>
+}
+@if(categoryCreated)
+{
+    <h4>Category created</h4>
+}
+else
+{
+    <button class="btn btn-primary" @onclick="CreateCategory">Create category</button>
+}
+@if(repCatCreated)
+{
+    <h4>Category created</h4>
+}
+else
+{
+    <button class="btn btn-primary" @onclick="CreateTestCat">Create repeat category</button>
+}
+@if(taskCreated)
+{
+    <h4>Task created</h4>
+}
+else
+{
+    <button class="btn btn-primary" @onclick="CreateTask">Create task</button>
+}
+@if(statusCreated)
+{
+    <h4>Status created</h4>
+}
+else
+{
+    <button class="btn btn-primary" @onclick="CreateStatus">Create status</button>
+}
+
+@code {
+    private bool userCreated = false;
+    private bool categoryCreated = false;
+    private bool repCatCreated = false;
+    private bool taskCreated = false;
+    private bool statusCreated = false;
+
+    private async Task CreateUser()
+    {
+        var users = await userData.GetUsers();
+
+        if(users?.Count > 0)
+        {
+            return;
+        }
+
+        UserModel user = new()
+            {
+                FirstName = "Deleted",
+                LastName = "User",
+                EmailAdress = "0"
+            };
+        await userData.InsertUser(user);
+        user = new()
+            {
+                FirstName = "Иван",
+                LastName = "Ерохин",
+                EmailAdress = "dominator228@gmail.com"
+            };
+        await userData.InsertUser(user);
+        user = new()
+            {
+                FirstName = "Славка",
+                LastName = "Сычёв",
+                EmailAdress = "omega@mail.ru"
+            };
+
+        await userData.InsertUser(user);
+        userCreated = true;
+    }
+
+    private async Task CreateCategory()
+    {
+        var categories = await categoryData.GetAllCategories();
+
+        if(categories?.Count > 0)
+        {
+            return;
+        }
+
+        CategoryModel category = new()
+            {
+                CategoryName = "гребец"
+            };
+        await categoryData.InsertCategory(category);
+        category = new()
+            {
+                CategoryName = "погонщик рабов"
+            };
+        await categoryData.InsertCategory(category);
+        category = new()
+            {
+                CategoryName = "кофеносчик"
+            };
+        await categoryData.InsertCategory(category);
+        categoryCreated = true;
+    }
+
+    private async Task CreateTestCat()
+    {
+
+        CategoryModel category = new()
+            {
+                CategoryName = "гр"
+            };
+
+        CategoryModel repeatedCategory = await categoryData.FindCategory(category.CategoryName);
+        if(repeatedCategory is null)
+        {
+            await categoryData.InsertCategory(category);
+            repCatCreated = true;
+        }
+    }
+
+    private async Task CreateTask()
+    {
+        var tasks = await taskData.GetTasks();
+
+        if(tasks?.Count > 0)
+        {
+            return;
+        }
+
+        TaskModel task = new()
+            {
+                Task = "Вёрстка",
+                Description = "margin left 10 px",
+                Notes = "нужен элитарный смузихлёб"
+            };
+        await taskData.InsertTask(task);
+        task = new()
+            {
+                Task = "Бекенд",
+                Description = "Работать за 2 миска риса",
+                Notes = "Нужен гребец с опытом вёрстки 99999 лет"
+            };
+        await taskData.InsertTask(task);
+        task = new()
+            {
+                Task = "спроектировать БД",
+                Description = "проектировка всех этих ваших зависимостей потому что я усталь :(",
+                //AuthorId = 2,
+                Notes = "Найдись, ты классный"
+            };
+        await taskData.InsertTask(task);
+        taskCreated = true;
+    }
+
+    private async Task CreateStatus()
+    {
+        var statuses = await statusData.GetAllStatuses();
+
+        if(statuses?.Count > 0)
+        {
+            return;
+        }
+
+        StatusModel status = new()
+            {
+                StatusName = "в разработке"
+            };
+        await statusData.InsertStatus(status);
+        status = new()
+            {
+                StatusName = "ожидает проверки"
+            };
+        await statusData.InsertStatus(status);
+        status = new()
+            {
+                StatusName = "*****, переделывай"
+            };
+        await statusData.InsertStatus(status);
+        statusCreated = true;
+    }
+}*@

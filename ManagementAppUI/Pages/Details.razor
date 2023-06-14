@@ -1,0 +1,260 @@
+﻿@page "/Details/{Id:int}"
+@attribute [Authorize()]
+
+@inject IStatusData statusData
+@inject ITaskData taskData
+@inject IUserData userData
+@inject NavigationManager navManager
+@using ManagementAppUI.Components
+
+<h1 class="page-heading text-uppercase mb-4">Task Details</h1>
+
+<div class="row justify-content-center detail-form">
+    <div class="col-xl-8 col-lg-10 form-layout">
+        @if (task is not null)
+        {
+            <div class="row task-detail-row">
+                <div class="col-11 task-detail">
+                    <div class="task-detail-text">
+                        <div>Creation date: @FormatDateTime(task.DateCreated)</div>
+                        <div class="fw-bold mb-2 task-detail-task">Task: @task.Task</div>
+                        <div class="mb-2 task-detail-author">Author: @FormatAuthor()</div>
+                        <div class="mb-2">@task.Description</div>
+                        <div class="mb-2">
+                            Appointed users:
+                            @if (appointedUsers?.Count > 0)
+                            {
+                                @foreach (var u in appointedUsers)
+                                {
+                                    <div>
+                                        > @u.FirstName @u.LastName - @u.EmailAdress
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <div>
+                                    No appointed users
+                                </div>
+                            }
+                        </div>
+                        <div class="task-entry-text-category">
+                            <div>@task.Category</div>
+                        </div>
+                        <AuthorizeView Roles="Manager">
+                            <div>
+                                <button class="btn btn-main text-uppercase" @onclick="ArchiveTask">Archive task</button>
+                                <button class="btn btn-main text-uppercase" @onclick="OnEditClick">Edit task</button>
+                                <button class="btn btn-main text-uppercase" @onclick="OnAppointClick">Appoint user</button>
+                            </div>
+                        </AuthorizeView>
+                    </div>
+                </div>
+                <div class="col-1 close-button-section">
+                    <button class="btn btn-close" @onclick="ClosePage"></button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+@if (task?.Status is not null)
+{
+    <div class="row justify-content-center detail-form">
+        <div class="col-xl-8 col-lg-10 task-results form-layout">
+            <div class="@GetStatusClass()"></div>
+            <div class="task-detail-status-section">
+                <div class="task-detail-status fw-bold mb-2 task-detail-task">
+                    Status: @task.Status
+                </div>
+                <div class="task-detail-notes">
+                    Note: @((MarkupString)task.Notes)
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (isEditing)
+{
+    <div class="row justify-content-center edit-form create-form">
+        <div class="col-xl-8 col-lg-10 form-layout">
+            <EditForm Model="@task" OnValidSubmit="EditTask">
+                <div class="input-section">
+                    <label class="form-label fw-bold text-uppercase" for="status">Status</label>
+                    <div class="input-description">Choose one status</div>
+                    <div class="col-lg-8">
+                        <MyInputRadioGroup id="status" @bind-Value="task.Status">
+                            @foreach (var s in statuses)
+                            {
+                            <div class="radio-item-group">
+                                <InputRadio Value="@s.StatusName" id="@s.StatusName" />
+                                <label for="@s.StatusName">@s.StatusName</label>
+                            </div>
+                            }
+                    </MyInputRadioGroup>
+                </div>
+            </div>
+            <div class="input-section">
+                <label class="form-label fw-bold text-uppercase" for="note">Notes</label>
+                <div class="input-description">Here you can post links to different materials or other notes</div>
+                <InputTextArea class="form-control" id="note" @bind-Value="task.Notes" />
+            </div>
+            <div class="center-children">
+                <button class="btn btn-main btn-lg text-uppercase" type="submit">Confirm</button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+}
+
+@if (isAppoint)
+{
+    <div class="row justify-content-center edit-form create-form">
+        <div class="col-xl-8 col-lg-10 form-layout">
+            <EditForm Model="@userToAppoint" OnValidSubmit="AppointUser">
+                <div class="input-section">
+                    <label class="form-label fw-bold text-uppercase" for="user">Users</label>
+                    <div class="input-description">Choose one user</div>
+                    <div class="col-lg-8">
+                        @if (users?.Count > 0)
+                        {
+                            <MyInputRadioGroup id="user" @bind-Value="userToAppoint.EmailAdress">
+                                @foreach (var u in users)
+                                {
+                            <div class="radio-item-group">
+                                <InputRadio Value="@u.EmailAdress" id="@u.EmailAdress" />
+                                <label for="@u.EmailAdress">@u.FirstName @u.LastName</label>
+                            </div>
+                                }
+                    </MyInputRadioGroup>
+                        }
+                        else
+                        {
+                            <div>
+                                No suitable users for this task
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="center-children">
+                    <button class="btn btn-main btn-lg text-uppercase" type="submit">Confirm</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+
+    private TaskModel task;
+    private UserModel author;
+    private List<UserModel> users;
+    private List<UserModel> appointedUsers;
+    private UserModel userToAppoint = new();
+    private List<StatusModel> statuses;
+    private bool isEditing = false;
+    private bool isAppoint = false;
+
+    protected async override Task OnInitializedAsync()
+    {
+        task = await taskData.GetTask(Id);
+        author = await userData.FindUserInformation(task.AuthorId);
+        statuses = await statusData.GetAllStatuses();
+        appointedUsers = await userData.GetAppointedUsers(Id);
+    }
+
+    private void ClosePage()
+    {
+        navManager.NavigateTo("/Tasks");
+    }
+
+    private void ReloadPage()
+    {
+        navManager.NavigateTo($"/Details/{Id}", true);
+    }
+
+    private string FormatDateTime(DateTime utc)
+    {
+        utc = utc.ToLocalTime();
+        return utc.ToString("dd.MM.yyyy");
+    }
+
+    private string FormatAuthor()
+    {
+        return author.FirstName + " " + author.LastName + " - " + author.EmailAdress;
+    }
+
+    private async void ArchiveTask()
+    {
+        task.Archived = true;
+        await taskData.ArchiveTask(task);
+        navManager.NavigateTo("/");
+    }
+
+    private void OnEditClick()
+    {
+        if (isEditing == true)
+        {
+            isEditing = false;
+        }
+        else
+        {
+            isEditing = true;
+        }
+    }
+
+    private async Task OnAppointClick()
+    {
+        if (isAppoint == true)
+        {
+            isAppoint = false;
+        }
+        else
+        {
+            isAppoint = true;
+            users = await userData.GetUsersToAppoint(task.Category);
+        }
+    }
+
+    private async Task EditTask()
+    {
+        if (task.Status == "Completed" || task.Status == "Dismissed")
+        {
+            await userData.RemoveTaskFromUsers(task.Id);
+        }
+        await taskData.UpdateTask(task);
+        isEditing = false;
+
+        ReloadPage();
+    }
+
+    private async Task AppointUser()
+    {
+        await userData.AppointUser(userToAppoint.EmailAdress, task.Id);
+        isAppoint = false;
+
+        ReloadPage();
+    }
+
+    private string GetStatusClass()
+    {
+        if (task is null || task.Status is null)
+        {
+            return "task-detail-status-none";
+        }
+
+        string output = task.Status switch
+        {
+            "Completed" => "task-detail-status-completed",
+            "For revision" => "task-detail-status-for-revision",
+            "Watching" => "task-detail-status-watching",
+            "Upcoming" => "task-detail-status-upcoming",
+            "Dismissed" => "task-detail-status-dismissed",
+            _ => "task-detail-status-none",
+        };
+
+        return output;
+    }
+}

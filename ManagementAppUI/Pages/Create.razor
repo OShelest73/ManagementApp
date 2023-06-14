@@ -1,0 +1,119 @@
+﻿@page "/Create"
+@attribute [Authorize(Roles = "Manager")]
+
+@using ManagementAppUI.Components
+@using ManagementAppUI.Models
+@inject ICategoryData categoryData
+@inject ITaskData taskData
+@inject IUserData userData
+@inject IStatusData statusData
+@inject NavigationManager navManager
+
+<h1 class="page-heading text-uppercase mb-4">Make a task</h1>
+
+<div class="row justify-content-center create-form">
+    <div class="col-xl-8 col-lg-10 form-layout">
+        <div class="close-button-section">
+            <button class="btn btn-close" @onclick="ClosePage"></button>
+        </div>
+        @if(categories is not null && statuses is not null)
+        {
+            <EditForm Model="@task" OnValidSubmit="CreateTask">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+                <div class="input-section">
+                    <label class="form-label fw-bold text-uppercase" for="task-text">Task</label>
+                    <div class="input-description">Focus on the specific task</div>
+                    <InputText class="form-control"  id="task-text" @bind-Value="task.Task" />
+                </div>
+                <div class="input-section">
+                    <label class="form-label fw-bold text-uppercase" for="category">Category</label>
+                    <div class="input-description">Choose one category</div>
+                    <div class="col-lg-8">
+                        <MyInputRadioGroup id="category" @bind-Value="task.Category">
+                            @foreach(var c in categories)
+                            {
+                                <div class="radio-item-group">
+                                    <InputRadio Value="@c.CategoryName" id="@c.CategoryName"/>
+                                    <label for="@c.CategoryName">@c.CategoryName</label>
+                                </div>
+                            }
+                        </MyInputRadioGroup>
+                    </div>
+                </div>
+                <div class="input-section">
+                    <label class="form-label fw-bold text-uppercase" for="status">Status</label>
+                    <div class="input-description">Choose one status</div>
+                    <div class="col-lg-8">
+                        <MyInputRadioGroup id="status" @bind-Value="task.Status">
+                            @foreach(var s in statuses)
+                            {
+                                <div class="radio-item-group">
+                                    <InputRadio Value="@s.StatusName" id="@s.StatusName"/>
+                                    <label for="@s.StatusName">@s.StatusName</label>
+                                </div>
+                            }
+                        </MyInputRadioGroup>
+                    </div>
+                </div>
+                <div class="input-section">
+                    <label class="form-label fw-bold text-uppercase" for="description">Description</label>
+                    <div class="input-description">Briefly describe your task</div>
+                    <InputTextArea class="form-control" id="description" @bind-Value="task.Description" />
+                </div>
+                <div class="input-section">
+                    <label class="form-label fw-bold text-uppercase" for="note">Notes</label>
+                    <div class="input-description">Here you can post links to different materials or other notes</div>
+                    <InputTextArea class="form-control" id="note" @bind-Value="task.Notes" />
+                </div>
+                <div class="center-children">
+                    <button class="btn btn-main btn-lg text-uppercase" type="submit">Create</button>
+                </div>
+            </EditForm>
+        }
+        else
+        {
+            //TODO логика если категорий или статусов нет
+        }
+    </div>
+</div>
+
+@code {
+    private CreateTaskModel task = new();
+    private List<CategoryModel> categories;
+    private List<StatusModel> statuses;
+
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationState { get; set; }
+    private UserModel loggedInUser;
+
+    protected async override Task OnInitializedAsync()
+    {
+        categories = await categoryData.GetAllCategories();
+        statuses = await statusData.GetAllStatuses();
+    }
+
+    private void ClosePage()
+    {
+        navManager.NavigateTo("/Tasks");
+    }
+
+    private async Task CreateTask()
+    {
+        var authState = await authenticationState;
+
+        TaskModel t = new();
+        t.Task = task.Task;
+        t.Description = task.Description;
+        t.Notes = task.Notes;
+        t.AuthorId = authState.User.Identity.Name;
+        CategoryModel buffer = categories.Where(c => c.CategoryName == task.Category).First();
+        t.Category = buffer.CategoryName;
+        StatusModel buffer2 = statuses.Where(s => s.StatusName == task.Status).First();
+        t.Status = buffer2.StatusName;
+
+        await taskData.InsertTask(t);
+        task = new(); // чтобы точно вайпнуло таску если закрытие по какой-то причине не случилось
+        ClosePage();
+    }
+}

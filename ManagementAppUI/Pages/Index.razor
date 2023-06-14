@@ -1,0 +1,242 @@
+﻿@page "/Tasks"
+@attribute [Authorize()]
+
+@inject ICategoryData categoryData
+@inject IUserData userData
+@inject ITaskData taskData
+@inject IStatusData statusData
+@inject NavigationManager navManager
+@inject ProtectedSessionStorage sessionStorage
+@using System.Linq
+
+<h1 class="page-heading text-uppercase mb-4">Tasks</h1>
+
+<div class="row">
+    <div class="task-count col-md-4 mt-2">@tasks?.Count Tasks</div>
+    <div class="col-md-4 col-xl-5 btn-group">
+        <button class="btn btn-order @SortedByNewClass(true)" @onclick="(() => OrderByNew(true))">New</button>
+        <button class="btn btn-order @SortedByNewClass(false)"@onclick="(() => OrderByNew(false))">Old</button>
+    </div>
+    <div class="col-md-4 col-xl-3 search-box">
+        <input type="text" placeholder="Search"
+            aria-label="Search box" class="form-control rounded-control"
+            @oninput="((txt) => OnSearchInpt((string)txt.Value))" />
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8 col-xl-9">
+        @if (tasks is not null)
+        {
+            <Virtualize Items="@tasks" Context="t" OverscanCount="10">
+                <div class="task-entry">
+                    <div class="task-entry-text">
+                        <div class="task-entry-text-title" @onclick="(() => OpenDetails(t))">
+                            @t.Task
+                        </div>
+                        <div>
+                            <div class="task-entry-text-category" @onclick="(() => OpenDetails(t))">
+                                @t.Category
+                            </div>
+                        </div>
+                    </div>
+                    <div class="task-entry-status @GetTaskStatusClass(t)" @onclick="(() => OpenDetails(t))">
+                        <div class="task-entry-status-text">
+                            @t.Status
+                        </div> 
+                    </div>
+                </div>
+            </Virtualize>
+        }
+    </div>
+    <div class="col-md-4 col-xl-3">
+        @if (categories is not null)
+        {
+            <div class="categories">
+                <span class="text-uppercase fw-bold">Category</span>
+                <div class="@GetSelectedCategory()" @onclick="(() => OnCategoryClick())">All</div>
+                @foreach (var c in categories)
+                {
+                    <div class="@GetSelectedCategory(c.CategoryName)" @onclick="(() => OnCategoryClick(c.CategoryName))">@c.CategoryName</div>
+                }
+            </div>
+        }
+        @if (statuses is not null)
+        {
+            <div class="statuses">
+                <span class="text-uppercase fw-bold">Status</span>
+                <div class="@GetSelectedStatus()" @onclick="(() => OnStatusClick())">All</div>
+                @foreach (var s in statuses)
+                {
+                    <div class="@GetSelectedStatus(s.StatusName)" @onclick="(() => OnStatusClick(s.StatusName))">@s.StatusName</div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private List<TaskModel> tasks;
+    private List<CategoryModel> categories;
+    private List<StatusModel> statuses;
+
+    private string selectedCategory = "All";
+    private string selectedStatus = "All";
+    private string searchText = "";
+    bool isSortedByNew = true;
+
+    protected async override Task OnInitializedAsync()
+    {
+        categories = await categoryData.GetAllCategories();
+        statuses = await statusData.GetAllStatuses();
+    }
+
+    protected async override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if(firstRender)
+        {
+            await LoadFilterState();
+            await FilterTasks();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadFilterState()
+    {
+        var stringResults = await sessionStorage.GetAsync<string>(nameof(selectedCategory));
+        selectedCategory = stringResults.Success ? stringResults.Value : "All";
+
+        stringResults = await sessionStorage.GetAsync<string>(nameof(selectedStatus));
+        selectedStatus = stringResults.Success ? stringResults.Value : "All";
+
+        stringResults = await sessionStorage.GetAsync<string>(nameof(searchText));
+        searchText = stringResults.Success ? stringResults.Value : "";
+
+        var boolResults = await sessionStorage.GetAsync<bool>(nameof(isSortedByNew));
+        isSortedByNew = boolResults.Success ? boolResults.Value : true;
+    }
+
+    private async Task SaveFilterState()
+    {
+        await sessionStorage.SetAsync(nameof(selectedCategory), selectedCategory);
+        await sessionStorage.SetAsync(nameof(selectedStatus), selectedStatus);
+        await sessionStorage.SetAsync(nameof(searchText), searchText);
+        await sessionStorage.SetAsync(nameof(isSortedByNew), isSortedByNew);
+    }
+
+    private async Task FilterTasks()
+    {
+        var output = await taskData.GetTasks();
+
+        if(selectedCategory != "All")
+        {
+            output = output.Where(t => t.Category == selectedCategory).ToList();
+        }
+
+        if(selectedStatus != "All")
+        {
+            output = output.Where(t => t.Status == selectedStatus).ToList();
+        }
+
+        if(string.IsNullOrWhiteSpace(searchText) == false)
+        {
+            output = output.Where(t => 
+                t.Task.Contains(searchText, StringComparison.InvariantCultureIgnoreCase) || 
+                t.Description.Contains(searchText, StringComparison.InvariantCultureIgnoreCase)
+            ).ToList();
+        }
+
+        if(isSortedByNew == true)
+        {
+            output = output.OrderByDescending(t => t.DateCreated).ToList();
+        }
+
+        tasks = output;
+
+        await SaveFilterState();
+    }
+
+    private async Task OrderByNew(bool isNew)
+    {
+        isSortedByNew = isNew;
+        await FilterTasks();
+    }
+
+    private async Task OnSearchInpt(string searchInput)
+    {
+        searchText = searchInput;
+        await FilterTasks();
+    }
+
+    private async Task OnCategoryClick(string category = "All")
+    {
+        selectedCategory = category;
+        await FilterTasks();
+    }
+
+    private async Task OnStatusClick(string status = "All")
+    {
+        selectedStatus = status;
+        await FilterTasks();
+    }
+
+    private void OpenDetails(TaskModel task)
+    {
+        navManager.NavigateTo($"/Details/{task.Id}");
+    }
+
+    private string SortedByNewClass(bool isNew)
+    {
+        if (isNew == isSortedByNew)
+        {
+            return "sort-selected";
+        }
+        else
+        {
+            return "";
+        }
+    }
+
+    private string GetTaskStatusClass(TaskModel task)
+    {
+        if(task is null || task.Status is null)
+        {
+            return "task-entry-status-none";
+        }
+
+        string output = task.Status switch
+        {
+            "Completed" => "task-entry-status-completed",
+            "For revision" => "task-entry-status-for-revision",
+            "Watching" => "task-entry-status-watching",
+            "Upcoming" => "task-entry-status-upcoming",
+            "Dismissed" => "task-entry-status-dismissed",
+            _ => "task-entry-status-none",
+        };
+
+        return output;
+    }
+
+    private string GetSelectedCategory(string category = "All")
+    {
+        if (category == selectedCategory)
+        {
+            return "selected-category";
+        }
+        else
+        {
+            return "";
+        }
+    }
+    private string GetSelectedStatus(string status = "All")
+    {
+        if (status == selectedStatus)
+        {
+            return "selected-status";
+        }
+        else
+        {
+            return "";
+        }
+    }
+}

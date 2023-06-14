@@ -1,0 +1,29 @@
+﻿@using ManagementAppUI.Authentication
+@inject AuthenticationStateProvider authStateProvider
+@inject NavigationManager navManager
+
+<AuthorizeView Roles="Administrator">
+    <a class="login-link" href="/Registration">Administrator</a>
+</AuthorizeView>
+<AuthorizeView Roles="Manager">
+    <a class="login-link" href="/Create">Create task</a>
+</AuthorizeView>
+<AuthorizeView>
+    <Authorized>
+        <a class="login-link" href="/Profile">Profile</a>
+        <a class="login-link" href="javascript:void(0)" @onclick="Logout">Logout</a>
+    </Authorized>
+    <NotAuthorized>
+        <a class="login-link" href="/">Login</a>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code{
+    private async Task Logout()
+    {
+        var customAuthStateProvider = (CustomAuthenticationStateProvider)authStateProvider;
+        await customAuthStateProvider.UpdateAuthenticationState(null);
+
+        navManager.NavigateTo("/", true);
+    }
+}

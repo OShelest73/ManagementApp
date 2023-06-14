@@ -1,0 +1,232 @@
+﻿@page "/Profile"
+@attribute [Authorize()]
+
+@inject ITaskData taskData
+@inject IUserData userData
+@inject NavigationManager navManager
+@using ManagementAppUI.Models
+@using System.Security.Cryptography
+@using System.Text
+
+<h1 class="page-heading text-uppercase mb-4">My profile</h1>
+
+<div class="row">
+    <div class="col-12 close-button-section">
+        <button class="btn btn-close" @onclick="ClosePage"></button>
+    </div>
+</div>
+
+<div class="form-layout mb-3">
+    <h2 class="my-task-heading">My account</h2>
+    <p class="my-task-text">
+        <button class="btn btn-main text-uppercase" @onclick="OnChangeClick">Change Password</button>
+    </p>
+</div>
+
+@if (isChanging)
+{
+    <div class="row justify-content-center edit-form create-form">
+        <div class="col-xl-8 col-lg-10 form-layout mb-3">
+            <EditForm Model="@user" OnValidSubmit="ChangePassword">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+                <div class="input-section">
+                    <label class="form-label fw-bold text-uppercase" for="password">New Password</label>
+                    <div class="input-description">Enter the password</div>
+                    <InputText class="form-control" type="password" id="password" @bind-Value="user.Password" />
+                </div>
+                <div class="input-section">
+                    <label class="form-label fw-bold text-uppercase" for="passwordConfirm">Confirm Password</label>
+                    <div class="input-description">Confirm your password</div>
+                    <InputText class="form-control" type="password" id="passwordConfirm" @bind-Value="user.PasswordConfirm" />
+                </div>
+                <div class="center-children">
+                    <button class="btn btn-main btn-lg text-uppercase" type="submit">Confirm</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@if (currentTask is not null)
+{
+    <div class="form-layout mb-3">
+        <h2 class="my-task-heading">Your task</h2>
+        <p class="my-task-text">Task that You need to finish</p>
+
+        <div class="fw-bold task-detail-task">
+            Task: @currentTask.Task
+        </div>
+        <p class="my-task-text">
+            Description: @currentTask.Description
+        </p>
+        @if (currentTask.Category is not null)
+        {
+            <p class="my-task-text">
+                Category: @currentTask.Category
+            </p>
+        }
+        @if (currentTask.Status is not null)
+        {
+            <p class="my-task-text">
+                Status: @currentTask.Status
+            </p>
+        }
+        @if (currentTask.Notes is not null)
+        {
+            <p class="my-task-text">
+                Notes: @((MarkupString)currentTask.Notes)
+            </p>
+        }
+    </div>
+}
+
+@if (active?.Count > 0)
+{
+    <div class="form-layout mb-3">
+        <h2 class="my-task-heading">Active tasks</h2>
+        <p class="my-task-text">Your currently active tasks</p>
+
+        @foreach (var t in active)
+        {
+            <hr class="my-task-separator" />
+            <div class="fw-bold task-detail-task">
+                @t.Task
+            </div>
+            <p class="my-task-text">
+                @FormatDateTime(t.DateCreated)
+            </p>
+            @if (t.Category is not null)
+            {
+                <p class="my-task-text">
+                    @t.Category
+                </p>
+            }
+            @if (t.Status is not null)
+            {
+                <p class="fw-bold task-detail-task">
+                    @t.Status
+                </p>
+            }
+        }
+    </div>
+}
+
+@if (archived?.Count > 0)
+{
+    <div class="form-layout mb-3">
+        <h2 class="my-task-heading">Archived tasks</h2>
+        <p class="my-task-text">Tasks that were active but for some reason was removed to archive</p>
+
+        @foreach (var t in archived)
+        {
+            <hr class="my-task-separator" />
+            <div class="fw-bold task-detail-task">
+                @t.Task
+            </div>
+            <p class="my-task-text">
+                @FormatDateTime(t.DateCreated)
+            </p>
+            @if (t.Category is not null)
+            {
+                <p class="my-task-text">
+                    @t.Category
+                </p>
+            }
+            @if (t.Status is not null)
+            {
+                <p class="fw-bold task-detail-task">
+                    @t.Status
+                </p>
+            }
+        }
+    </div>
+}
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState> authenticationState { get; set; }
+    private UserModel loggedInUser;
+    private ChangePasswordModel user = new();
+    private List<TaskModel> active;
+    private List<TaskModel> archived;
+    private TaskModel currentTask;
+
+    bool isChanging = false;
+
+    protected async override Task OnInitializedAsync()
+    {
+        var authState = await authenticationState;
+        loggedInUser = await userData.FindUserInformation(authState.User.Identity.Name);
+
+        if (loggedInUser.TaskId is not null)
+        {
+            currentTask = await taskData.GetTask(loggedInUser.TaskId.Value);
+        }
+
+        var results = await taskData.GetUserTasks(loggedInUser.EmailAdress);
+
+        if (loggedInUser is not null && results is not null)
+        {
+            results = results.OrderByDescending(t => t.DateCreated).ToList();
+            active = results.Where(t => t.Archived == false).ToList();
+            archived = results.Where(t => t.Archived == true).ToList();
+        }
+    }
+
+    private void ClosePage()
+    {
+        navManager.NavigateTo("/Tasks");
+    }
+
+    private string FormatDateTime(DateTime utc)
+    {
+        utc = utc.ToLocalTime();
+        return utc.ToString("dd.MM.yyyy");
+    }
+
+    private void OnChangeClick()
+    {
+        if (isChanging == true)
+        {
+            isChanging = false;
+        }
+        else
+        {
+            isChanging = true;
+        }
+    }
+
+    private string AssemblePassword(string password, byte[] saltBytes)
+    {
+        var rfc2898DeriveBytes = new Rfc2898DeriveBytes(password, saltBytes, 1000);
+        var hashPassword = Convert.ToBase64String(rfc2898DeriveBytes.GetBytes(128));
+
+        return hashPassword;
+    }
+
+    private byte[] GenerateSalt()
+    {
+        int minSaltSize = 4;
+        int maxSaltSize = 8;
+
+        Random random = new Random();
+        int size = random.Next(minSaltSize, maxSaltSize);
+        var saltBytes = new byte[size];
+
+        RandomNumberGenerator rng = RandomNumberGenerator.Create();
+        rng.GetNonZeroBytes(saltBytes);
+
+        return saltBytes;
+    }
+
+    private async Task ChangePassword()
+    {
+        byte[] salt = GenerateSalt();
+        loggedInUser.Password = AssemblePassword(user.Password, salt);
+        loggedInUser.Salt = Convert.ToBase64String(salt);
+        await userData.ChangePassword(loggedInUser);
+
+        isChanging = false;
+    }
+}

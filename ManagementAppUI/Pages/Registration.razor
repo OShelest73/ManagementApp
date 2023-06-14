@@ -1,0 +1,159 @@
+﻿@page "/Registration"
+@attribute [Authorize(Roles = "Administrator")]
+
+@inject IUserData userData
+@inject ICategoryData categoryData
+@inject NavigationManager navManager
+@using ManagementAppUI.Models
+@using ManagementAppUI.Components
+@using System.Security.Cryptography
+@using System.Text
+
+<h1 class="page-heading text-uppercase mb-4">Create user</h1>
+<div class="row justify-content-center create-form">
+    <div class="col-xl-8 col-lg-10 form-layout">
+        <div class="close-button-section">
+            <button class="btn btn-close" @onclick="ClosePage"></button>
+        </div>
+        @if(categories is not null)
+        {
+            <EditForm Model="@user" OnValidSubmit="CreateUser">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+                <div class="input-section">
+                    @if(isRepeated)
+                    {
+                       <div>
+                           <label>The account with this email already exists</label>
+                        </div>
+                    }
+                    <label class="form-label fw-bold text-uppercase" for="user-email">Enter email adress</label>
+                    <div class="input-description">Email adress</div>
+                    <InputText class="form-control" id="user-email" @bind-Value="user.EmailAdress" />
+                </div>
+                <div class="input-section">
+                    <label class="form-label fw-bold text-uppercase" for="FirstName">First Name</label>
+                    <div class="input-description">Enter the first name</div>
+                    <InputText class="form-control" id="firstname" @bind-Value="user.FirstName" />
+                </div>
+                <div class="input-section">
+                    <label class="form-label fw-bold text-uppercase" for="LastName">Last Name</label>
+                    <div class="input-description">Enter the last name</div>
+                    <InputText class="form-control" id="lastname" @bind-Value="user.LastName" />
+                </div>
+                <div class="input-section">
+                    <label class="form-label fw-bold text-uppercase" for="category">Category</label>
+                    <div class="input-description">Choose one category</div>
+                    <div class="col-lg-8">
+                        <MyInputRadioGroup id="category" @bind-Value="user.Category">
+                            @foreach(var c in categories)
+                            {
+                                <div class="radio-item-group">
+                                    <InputRadio Value="@c.CategoryName" id="@c.CategoryName"/>
+                                    <label for="@c.CategoryName">@c.CategoryName</label>
+                                </div>
+                            }
+                        </MyInputRadioGroup>
+                    </div>
+                </div>
+                <div class="input-section">
+                    <label class="form-label fw-bold text-uppercase" for="password">Password</label>
+                    <div class="input-description">Enter the password</div>
+                    <InputText class="form-control" type="password" id="password" @bind-Value="user.Password" />
+                </div>
+                <div class="input-section">
+                    <label class="form-label fw-bold text-uppercase" for="passwordConfirm">Confirm Password</label>
+                    <div class="input-description">Confirm your password</div>
+                    <InputText class="form-control" type="password" id="passwordConfirm" @bind-Value="user.PasswordConfirm"/>
+                </div>
+                <div class="center-children">
+                    <button class="btn btn-main btn-lg text-uppercase" type="submit">Register</button>
+                </div>
+            </EditForm>
+        }
+        else
+        {
+            //TODO логика если категорий нет
+        }
+    </div>
+</div>
+
+@code {
+    private CreateUserModel user = new();
+    private UserModel bufferUser;
+    private List<CategoryModel> categories;
+    private bool isRepeated = false;
+
+    protected async override Task OnInitializedAsync()
+    {
+        categories = await categoryData.GetAllCategories();
+    }
+
+    private void ClosePage()
+    {
+        navManager.NavigateTo("/Tasks");
+    }
+
+    private void ReloadPage()
+    {
+        navManager.NavigateTo("/Registration");
+    }
+
+    private string AssemblePassword(string password, byte[] saltBytes)
+    {
+        var rfc2898DeriveBytes = new Rfc2898DeriveBytes(password, saltBytes, 1000);
+        var hashPassword = Convert.ToBase64String(rfc2898DeriveBytes.GetBytes(128));
+
+        return hashPassword;
+    }
+
+    private byte[] GenerateSalt()
+    {
+        int minSaltSize = 4;
+        int maxSaltSize = 8;
+
+        Random random = new Random();
+        int size = random.Next(minSaltSize, maxSaltSize);
+        var saltBytes = new byte[size];
+
+        RandomNumberGenerator rng = RandomNumberGenerator.Create();
+        rng.GetNonZeroBytes(saltBytes);
+
+        return saltBytes;
+    }
+
+    private async Task CreateUser()
+    {
+        UserModel u = new();
+        u.EmailAdress = user.EmailAdress;
+        u.FirstName = user.FirstName;
+        u.LastName = user.LastName;
+        CategoryModel buffer = categories.Where(c => c.CategoryName == user.Category).First();
+        u.Category = buffer.CategoryName;
+        u.Password = user.Password;
+
+        if(u.Category is null)
+        {
+            user.Category = "";
+            return;
+        }
+
+        bufferUser = await userData.FindUserInformation(u.EmailAdress); // проверяем есть ли у нас уже такой юзер, если есть, то не создаём
+
+        if(bufferUser is null)
+        {
+            byte[] salt = GenerateSalt();
+            u.Password = AssemblePassword(u.Password, salt);
+            u.Salt = Convert.ToBase64String(salt);
+            await userData.CreateUser(u);
+
+            user = new(); // чтобы точно вайпнуло пользователя если закрытие по какой-то причине не случилось
+            ClosePage();
+        }
+        else
+        {
+            isRepeated = true;
+            ReloadPage();
+        }
+    }
+}
