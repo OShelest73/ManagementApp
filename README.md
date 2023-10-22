@@ -1,6 +1,6 @@
 # ManagementApp
-### Меенджер задач
-### Использованные технологии:
+### Task Manager
+### Technologies used:
 * .Net Blazor (server side)
 * Html
 * Css
